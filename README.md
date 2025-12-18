@@ -1,4 +1,4 @@
-这是一个为 [AstrBot](https://github.com/Soulter/AstrBot) 设计的图像处理插件。集成了**火山引擎（豆包）的文生图能力和阿里云（通义千问）的图片**编辑能力。
+这是一个为 [AstrBot](https://github.com/Soulter/AstrBot) 设计的图像处理函数工具。集成了**火山引擎（豆包）的文生图能力和阿里云（通义千问）的图片**编辑能力。
 
 ## ✨ 支持模型
 
