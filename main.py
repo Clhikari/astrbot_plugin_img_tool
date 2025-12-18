@@ -1,8 +1,9 @@
-from astrbot.api.all import *
-from astrbot.api import logger
+import base64
+from astrbot.api.all import AstrMessageEvent
+from astrbot.api.star import register, Star, Context
+from astrbot.api import logger, AstrBotConfig
 import astrbot.api.message_components as Comp
 import aiohttp
-import json
 from pydantic import Field
 from pydantic.dataclasses import dataclass
 from astrbot.core.agent.run_context import ContextWrapper
@@ -25,33 +26,28 @@ class DoubaoDrawTool(FunctionTool[AstrAgentContext]):
             "required": ["prompt"],
         }
     )
-
-    # 需要保存插件实例引用
     plugin_instance: object = None
 
-    async def call(
-        self, context: ContextWrapper[AstrAgentContext], **kwargs
-    ) :
+    async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs):
         """执行图片生成"""
         prompt = kwargs.get("prompt", "")
 
         if not prompt:
             yield logger.warning("缺少图片描述")
+            return
 
-        # 获取事件对象
         event = context.context.event
         event: AstrMessageEvent
-        # 发送生成中提示
-        event.plain_result("🛠️正在调用工具DoubaoDrawTool")
+        event.plain_result("🎨 正在生成图片...")
 
         # API 请求
         url = "https://ark.cn-beijing.volces.com/api/v3/images/generations"
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.plugin_instance.api_key}",
+            "Authorization": f"Bearer {self.plugin_instance.config['volc_api_key']}",
         }
         data = {
-            "model": self.plugin_instance.endpoint_id,
+            "model": self.plugin_instance.config["volc_endpoint_id"],
             "prompt": prompt,
         }
 
@@ -62,8 +58,10 @@ class DoubaoDrawTool(FunctionTool[AstrAgentContext]):
                 async with session.post(url, headers=headers, json=data) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
-                        logger.error(f"API 请求失败，状态码: {resp.status}, 错误: {error_text}")
-                        yield logger.error(f"API请求失败: {error_text}")
+                        logger.error(
+                            f"API 请求失败，状态码: {resp.status}, 错误: {error_text}"
+                        )
+                        yield event.plain_result(f"❌ API请求失败: {error_text}")
                         return
                     result = await resp.json()
 
@@ -74,7 +72,8 @@ class DoubaoDrawTool(FunctionTool[AstrAgentContext]):
 
         except Exception as e:
             logger.error(f"生成过程中发生异常：{str(e)}")
-            yield f"生成失败: {str(e)}"
+            yield event.plain_result(f"❌ 生成失败: {str(e)}")
+            return
 
         # 发送图片
         if image_url:
@@ -87,19 +86,7 @@ class DoubaoDrawTool(FunctionTool[AstrAgentContext]):
             logger.info(f"图片已生成并发送: {image_url}")
         else:
             logger.warning("未能解析出有效的图片 URL")
-            yield logger.error("生成失败，未获取到图片 URL")
-
-    async def _get_user_image_url(self, event: AstrMessageEvent) -> str | None:
-        """从 AstrBot 事件中提取图片 URL"""
-        try:
-            # 检查当前消息中是否有图片
-            for component in event.message_obj.message:
-                if isinstance(component, Comp.Image):
-                    return component.url
-            return ""
-        except Exception as e:
-            logger.error(f"提取图片失败: {e}")
-            return ""
+            yield event.plain_result("❌ 生成失败，未获取到图片 URL")
 
 
 @dataclass
@@ -124,22 +111,43 @@ class QwenEditTool(FunctionTool[AstrAgentContext]):
 
     async def call(self, context: ContextWrapper[AstrAgentContext], **kwargs):
         instruction = kwargs.get("instruction", "")
-        logger.info(f"prompt：{instruction}")
+        logger.info(f"修图指令: {instruction}")
         event = context.context.event
         event: AstrMessageEvent
 
-        # 找图
-        base64_image = await self._get_user_image_url(event)
+        # 找图并转Base64
+        base64_image = await self._get_user_image_base64(event)
         if not base64_image:
-            yield event.plain_result("❌ 请先发送一张图片，再说出修图指令哦。")
+            yield event.plain_result("❌ 请先发送一张图片，再说出修图指令。")
             return
 
-        # 调用阿里云 - 同步模式
+        yield event.plain_result("🎨 正在高清修图中，请稍候...")
+
+        # 获取配置
+        config = self.plugin_instance.config
+        size = config.get("edit_image_size", "1536*1536")
+        enable_neg = config.get("enable_negative_prompt", True)
+        neg_prompt = config.get("negative_prompt", "低质量，低分辨率")
+
+        # 调用阿里云API - 同步模式
         url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.plugin_instance.aliyun_api_key}",
+            "Authorization": f"Bearer {config['aliyun_api_key']}",
         }
+
+        # 构建参数
+        params = {
+            "n": 1,
+            "prompt_extend": True,
+            "watermark": False,
+            "size": size,
+        }
+
+        # 根据配置决定是否添加负面提示词
+        if enable_neg and neg_prompt:
+            params["negative_prompt"] = neg_prompt
+
         payload = {
             "model": "qwen-image-edit-plus-2025-10-30",
             "input": {
@@ -153,13 +161,7 @@ class QwenEditTool(FunctionTool[AstrAgentContext]):
                     }
                 ]
             },
-            "parameters": {
-                "n": 1,
-                "negative_prompt": "低质量，低分辨率，残缺、多余的手指、比例不良",
-                "prompt_extend": True,
-                "watermark": False,
-                "size": "2048*2048",
-            },
+            "parameters": params,
         }
 
         try:
@@ -167,33 +169,39 @@ class QwenEditTool(FunctionTool[AstrAgentContext]):
                 async with session.post(url, headers=headers, json=payload) as resp:
                     if resp.status != 200:
                         err = await resp.text()
-                        logger.error(f"❌ 阿里云API报错: {err}")
+                        logger.error(f"阿里云API报错: {err}")
+                        yield event.plain_result(f"❌ API报错: {err}")
                         return
 
                     result = await resp.json()
 
                     if "output" in result and "choices" in result["output"]:
                         content = result["output"]["choices"][0]["message"]["content"]
-                        # 找到image字段
                         final_img = next(
                             (item["image"] for item in content if "image" in item),
                             None,
                         )
 
                         if final_img:
-                            yield event.chain_result([
-                                Comp.At(qq=event.get_sender_id()),
-                                Comp.Image.fromURL(final_img),
-                            ])
+                            yield event.chain_result(
+                                [
+                                    Comp.At(qq=event.get_sender_id()),
+                                    Comp.Plain("✨ 修图完成：\n"),
+                                    Comp.Image.fromURL(final_img),
+                                ]
+                            )
+                            logger.info(f"修图成功，输出分辨率: {size}")
                         else:
                             yield event.plain_result("❌ 未能获取到修改后的图片")
                     else:
-                        logger.error(f"❌ API返回异常: {result}")
+                        logger.error(f"API返回异常: {result}")
+                        yield event.plain_result(f"❌ API返回异常")
 
         except Exception as e:
-            logger.error(f"❌ 异常: {e}")
+            logger.error(f"修图异常: {e}")
+            yield event.plain_result(f"❌ 异常: {e}")
 
-    async def _get_user_image_url(self, event) -> str | None:
+    async def _get_user_image_base64(self, event) -> str | None:
         """获取图片并转换为Base64"""
         for component in event.message_obj.message:
             if isinstance(component, Comp.Image):
@@ -201,7 +209,6 @@ class QwenEditTool(FunctionTool[AstrAgentContext]):
                 logger.info(f"原始图片URL: {url}")
 
                 try:
-                    # 下载图片
                     async with aiohttp.ClientSession() as session:
                         async with session.get(url) as resp:
                             if resp.status != 200:
@@ -209,26 +216,25 @@ class QwenEditTool(FunctionTool[AstrAgentContext]):
                                 return None
 
                             image_data = await resp.read()
-
-                            # 转Base64
                             encoded = base64.b64encode(image_data).decode("utf-8")
 
-                            # 通过文件头魔数判断真实格式
-                            if image_data[:4] == b'\x89PNG':
+                            # 判断图片格式
+                            if image_data[:4] == b"\x89PNG":
                                 content_type = "image/png"
-                            elif image_data[:2] in (b'\xff\xd8', b'\xff\xdb'):
+                            elif image_data[:2] in (b"\xff\xd8", b"\xff\xdb"):
                                 content_type = "image/jpeg"
-                            elif image_data[:4] == b'RIFF' and image_data[8:12] == b'WEBP':
+                            elif (
+                                image_data[:4] == b"RIFF"
+                                and image_data[8:12] == b"WEBP"
+                            ):
                                 content_type = "image/webp"
                             else:
-                                # 尝试从响应头获取
-                                content_type = resp.headers.get("Content-Type", "image/jpeg")
+                                content_type = resp.headers.get(
+                                    "Content-Type", "image/jpeg"
+                                )
 
-                            # 返回标准格式
                             base64_image = f"data:{content_type};base64,{encoded}"
-                            logger.info(
-                                f"✅ 图片已转换为Base64 (前50字符): {base64_image[:50]}..."
-                            )
+                            logger.info(f"✅ 图片已转换 (类型: {content_type})")
                             return base64_image
 
                 except Exception as e:
@@ -237,48 +243,27 @@ class QwenEditTool(FunctionTool[AstrAgentContext]):
         return None
 
 
-class DoubaoImagePlugin(Star):
-    def __init__(self, context: Context):
+@register(
+    "AIImagePlugin",
+    "Clhikari",
+    "AI图片生成与编辑工具",
+    "1.0.0",
+    "https://github.com/Clhikari/astrbot_plugin_img_tool",
+)
+class AIImagePlugin(Star):
+    def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
+        self.config = config
 
-        # 获取【绝对路径】，确保在 Linux/Docker 下路径正确
-        self.base_dir = os.path.dirname(os.path.abspath(__file__))
-        self.config_path = os.path.join(self.base_dir, "config.json")
+        # 检查配置完整性
+        required_keys = ["volc_api_key", "volc_endpoint_id", "aliyun_api_key"]
+        missing_keys = [key for key in required_keys if not config.get(key)]
 
-        logger.info(f"📂 插件所在目录: {self.base_dir}")
-        logger.info(f"🔍 正在寻找配置文件: {self.config_path}")
-
-        # 检查目录下到底有哪些文件
-        try:
-            files_in_dir = os.listdir(self.base_dir)
-            logger.info(f"📄 目录下的文件列表: {files_in_dir}")
-
-            if "config.json" not in files_in_dir:
-                logger.error(
-                    f"❌ 致命错误: 在 {self.base_dir} 下没有找到 config.json！"
-                )
-                logger.error("请检查文件名是否正确？(比如是不是叫 config.json.txt ?)")
-        except Exception as e:
-            logger.error(f"无法读取目录列表: {e}")
-
-        self.volc_api_key = ""
-        self.volc_endpoint_id = ""
-        self.aliyun_api_key = ""
-
-        # 读取配置文件
-        if os.path.exists(self.config_path):
-            try:
-                with open(self.config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-                    self.volc_api_key = config.get("volc_api_key", "")
-                    self.volc_endpoint_id = config.get("volc_endpoint_id", "")
-                    self.aliyun_api_key = config.get("aliyun_api_key", "")
-
-                    logger.info("✅ 成功读取 config.json")
-            except Exception as e:
-                logger.error(f"❌ 读取 config.json 失败 (格式错误?): {e}")
+        if missing_keys:
+            logger.warning(f"⚠️ 缺少配置项: {', '.join(missing_keys)}")
+            logger.warning("请在 WebUI 的插件管理页面配置相关 API Key")
         else:
-            logger.warning(f"❌ 配置文件不存在: {self.config_path}")
+            logger.info("✅ 配置加载成功")
 
         # 注册工具
         doubao_tool = DoubaoDrawTool()
@@ -289,6 +274,4 @@ class DoubaoImagePlugin(Star):
         qwen_tool.plugin_instance = self
         self.context.add_llm_tools(qwen_tool)
 
-        logger.info(
-            f"插件加载完毕。阿里云Key状态: {'✅' if self.aliyun_api_key else '❌'}"
-        )
+        logger.info(f"🎨 AI图片工具插件已加载 v1.0.0")

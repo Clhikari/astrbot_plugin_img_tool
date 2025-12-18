@@ -1,0 +1,45 @@
+{
+    "volc_api_key": {
+        "description": "火山引擎（豆包）API Key",
+        "type": "string",
+        "hint": "用于文生图功能，获取地址: https://console.volcengine.com/ark",
+        "obvious_hint": true,
+        "default": ""
+    },
+    "volc_endpoint_id": {
+        "description": "火山引擎（豆包）Endpoint ID",
+        "type": "string",
+        "hint": "推理接入点ID，在火山引擎控制台获取",
+        "default": ""
+    },
+    "aliyun_api_key": {
+        "description": "阿里云DashScopeAPIKey",
+        "type": "string",
+        "hint": "用于图片编辑功能，获取地址: https://dashscope.console.aliyun.com/apiKey",
+        "obvious_hint": true,
+        "default": ""
+    },
+    "edit_image_size": {
+        "description": "修图输出分辨率",
+        "type": "string",
+        "hint": "格式: 宽*高，范围512-2048，推荐1536*1536",
+        "default": "1536*1536",
+        "options": [
+            "1024*1024",
+            "1536*1536",
+            "2048*2048"
+        ]
+    },
+    "enable_negative_prompt": {
+        "description": "启用负面提示词",
+        "type": "bool",
+        "hint": "用于提升修图质量，避免低质量输出",
+        "default": true
+    },
+    "negative_prompt": {
+        "description": "负面提示词内容",
+        "type": "text",
+        "hint": "描述不希望出现的内容",
+        "default": "低质量，低分辨率，残缺、多余的手指、比例不良，模糊"
+    }
+}
