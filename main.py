@@ -41,7 +41,7 @@ class AIImagePlugin(Star):
                 url, timeout=aiohttp.ClientTimeout(total=30),  # pyright: ignore[reportArgumentType]
             ) as resp:
                 if resp.status != 200:
-                    logger.error(f"图片下载失败 [{resp.status}]")
+                    logger.error(f"图片下载失败 [{resp.status}]", exc_info=True)
                     return None
 
                 # 先读取文件头用于类型判断（只读前16字节）
@@ -78,7 +78,7 @@ class AIImagePlugin(Star):
                 return base64_image
 
         except aiohttp.ClientError as e:
-            logger.error(f"下载失败: {e}")
+            logger.error(f"下载失败: {e}", exc_info=True)
             return None
         except Exception as e:
             logger.error(f"处理失败: {e}", exc_info=True)
@@ -164,7 +164,10 @@ class AIImagePlugin(Star):
             ) as resp:
                 if resp.status != 200:
                     err_text = await resp.text()
-                    logger.error(f"❌ API请求失败 ({resp.status}): {err_text[:100]}")
+                    logger.error(
+                        f"❌ API请求失败 ({resp.status}): {err_text[:100]}",
+                        exc_info=True,
+                    )
                     await event.send(MessageChain().message("❌ API请求失败,详细看日志"))
                     return f"❌ API请求失败 ({resp.status}): {err_text[:100]}"
 
@@ -180,13 +183,14 @@ class AIImagePlugin(Star):
                     )
                     return f"成功生成了图片，提示词为：{prompt}，图片已发送给用户。"
                 else:
-                    logger.error(f"❌ API返回数据异常: {result}")
+                    logger.error(f"❌ API返回数据异常: {result}", exc_info=True)
                     await event.send(MessageChain().message("❌ API返回数据异常,详细看日志"))
                     return f"❌ API返回数据异常: {result}"
         except Exception as e:
-            logger.error(f"文生图异常: {e}")
+            logger.error(f"文生图异常: {e}", exc_info=True)
             await event.send(MessageChain().message(f"❌ 生成出错: {str(e)}"))
             return f"❌ 图片生成出错: {str(e)},终止调用"
+        
     @filter.llm_tool(name="edit_image_qwen")
     async def edit_image(self, event: AstrMessageEvent, instruction: str):
         """
@@ -259,7 +263,9 @@ class AIImagePlugin(Star):
             ) as resp:
                 if resp.status != 200:
                     err = await resp.text()
-                    logger.error(f"❌ 阿里云API报错 ({resp.status}): {err[:100]}")
+                    logger.error(
+                        f"❌ 阿里云API报错 ({resp.status}): {err[:100]}", exc_info=True
+                    )
                     await event.send(MessageChain().message("❌ 阿里云API报错,详细看日志"))
                     return "❌ 阿里云API报错,终止调用"
                 result = await resp.json()
@@ -286,7 +292,7 @@ class AIImagePlugin(Star):
                 )
 
         except Exception as e:
-            logger.error(f"修图异常: {e}")
+            logger.error(f"修图异常: {e}", exc_info=True)
             await event.send(MessageChain().message("❌ 修图过程发生异常详请看日志"))
             return f"工具执行发生严重系统错误: {e}"
     async def _get_session(self) -> aiohttp.ClientSession:
