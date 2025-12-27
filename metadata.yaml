@@ -1,6 +1,6 @@
 name: astrbot_plugin_img_tool
 display_name: 豆包&千问图生成工具
 desc: 根据消息信息生成图片或修改的函数工具
-version: v1.0.1
+version: v1.0.2
 author: Clhikari
 repo: https://github.com/Clhikari/astrbot_plugin_img_tool
