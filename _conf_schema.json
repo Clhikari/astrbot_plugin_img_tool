@@ -1,45 +1,86 @@
 {
-    "volc_api_key": {
-        "description": "火山引擎（豆包）API Key",
-        "type": "string",
-        "hint": "用于文生图功能，获取地址: https://console.volcengine.com/ark",
-        "obvious_hint": true,
-        "default": ""
-    },
-    "volc_endpoint_id": {
-        "description": "火山引擎（豆包）Endpoint ID",
-        "type": "string",
-        "hint": "推理接入点ID，在火山引擎控制台获取",
-        "default": ""
-    },
-    "aliyun_api_key": {
-        "description": "阿里云DashScopeAPIKey",
-        "type": "string",
-        "hint": "用于图片编辑功能，获取地址: https://dashscope.console.aliyun.com/apiKey",
-        "obvious_hint": true,
-        "default": ""
-    },
-    "edit_image_size": {
-        "description": "修图输出分辨率",
-        "type": "string",
-        "hint": "格式: 宽*高，范围512-2048，推荐1536*1536",
-        "default": "1536*1536",
-        "options": [
-            "1024*1024",
-            "1536*1536",
-            "2048*2048"
-        ]
-    },
-    "enable_negative_prompt": {
-        "description": "启用负面提示词",
-        "type": "bool",
-        "hint": "用于提升修图质量，避免低质量输出",
-        "default": true
-    },
-    "negative_prompt": {
-        "description": "负面提示词内容",
-        "type": "text",
-        "hint": "描述不希望出现的内容",
-        "default": "低质量，低分辨率，残缺、多余的手指、比例不良，模糊"
-    }
+  "volc_api_key": {
+    "description": "火山引擎（豆包）API Key",
+    "type": "string",
+    "hint": "用于文生图，获取地址: https://console.volcengine.com/ark",
+    "obvious_hint": true,
+    "default": ""
+  },
+  "volc_endpoint_id": {
+    "description": "火山引擎（豆包）Endpoint ID",
+    "type": "string",
+    "hint": "推理接入点 ID，通常以 ep- 开头",
+    "default": ""
+  },
+  "draw_image_size": {
+    "description": "文生图输出分辨率",
+    "type": "string",
+    "hint": "可选。支持 1k、2k、4k，或 宽x高（例如 1024x1024）。为空时使用服务默认值。",
+    "default": "",
+    "options": [
+      "1024x1024",
+      "1536x1536",
+      "2048x2048"
+    ]
+  },
+  "draw_add_watermark": {
+    "description": "文生图是否添加水印",
+    "type": "bool",
+    "hint": "默认 false（不加水印）。若平台策略强制加水印，可能仍会出现。",
+    "default": false
+  },
+  "aliyun_api_key": {
+    "description": "阿里云 DashScope API Key",
+    "type": "string",
+    "hint": "用于修图，获取地址: https://dashscope.console.aliyun.com/apiKey",
+    "obvious_hint": true,
+    "default": ""
+  },
+  "qwen_model_name": {
+    "description": "修图模型名称",
+    "type": "string",
+    "hint": "例如: qwen-image-edit-plus-2025-10-30",
+    "default": "qwen-image-edit-plus-2025-10-30"
+  },
+  "edit_image_size": {
+    "description": "修图输出分辨率",
+    "type": "string",
+    "hint": "格式: 宽*高，范围 512-2048，默认 1536*1536",
+    "default": "1536*1536",
+    "options": [
+      "1024*1024",
+      "1536*1536",
+      "2048*2048"
+    ]
+  },
+  "enable_negative_prompt": {
+    "description": "启用负面提示词",
+    "type": "bool",
+    "hint": "用于提升修图质量，避免低质量输出",
+    "default": true
+  },
+  "negative_prompt": {
+    "description": "负面提示词内容",
+    "type": "text",
+    "hint": "描述不希望出现在结果中的内容",
+    "default": "低质量，模糊，畸变，错误人体结构"
+  },
+  "max_image_size_mb": {
+    "description": "输入图片大小上限（MB）",
+    "type": "float",
+    "hint": "下载用户图片时的大小限制，建议 1-30",
+    "default": 10
+  },
+  "request_timeout_sec": {
+    "description": "HTTP 请求超时（秒）",
+    "type": "float",
+    "hint": "用于下载图片和调用外部 API，建议 30-90",
+    "default": 60
+  },
+  "request_retry_count": {
+    "description": "HTTP 请求重试次数",
+    "type": "int",
+    "hint": "遇到 429/5xx 或网络超时时的重试次数，0 表示不重试。",
+    "default": 2
+  }
 }
